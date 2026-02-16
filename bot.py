@@ -83,7 +83,7 @@ def get_font(size, bold=False):
     return ImageFont.load_default()
 
 def create_demotivator(text, author_name, background_img=None):
-    """Создаёт демотиватор с уменьшенным на 30% текстом"""
+    """Создаёт демотиватор: заголовок (автор) + основной текст (одинаковый размер)"""
     width, height = 1200, 1000
     img_width, img_height = 1000, 600
     
@@ -113,34 +113,38 @@ def create_demotivator(text, author_name, background_img=None):
         width=4
     )
     
-    # Оригинальное сообщение сверху (уменьшено)
-    original_font = get_font(18)  # Было 24
-    original_text = text
-    bbox_orig = draw.textbbox((0, 0), original_text, font=original_font)
-    orig_width = bbox_orig[2] - bbox_orig[0]
-    x_orig = (width - orig_width) // 2
-    y_orig = 40
-    
-    for offset in [(-1,-1), (1,-1), (-1,1), (1,1)]:
-        draw.text((x_orig + offset[0], y_orig + offset[1]), original_text, font=original_font, fill=(0,0,0))
-    draw.text((x_orig, y_orig), original_text, font=original_font, fill=(200, 200, 200))
-    
-    # Основной текст (УМЕНЬШЕН НА 30%)
+    # Определяем размер шрифта в зависимости от длины текста
     words = text.split()
     word_count = len(words)
     
-    # НОВЫЕ РАЗМЕРЫ (уменьшены на 30% от предыдущих)
     if word_count <= 2:
-        font_size = 49      # Было 70
-    elif word_count <= 3:
-        font_size = 42      # Было 60
+        font_size = 70
     elif word_count <= 4:
-        font_size = 38      # Было 55
+        font_size = 60
+    elif word_count <= 6:
+        font_size = 50
+    elif word_count <= 10:
+        font_size = 45
+    elif word_count <= 15:
+        font_size = 38
     else:
-        font_size = 34      # Было 48
+        font_size = 32
     
-    font_big = get_font(font_size, bold=True)
-    font_small = get_font(16)  # Для автора
+    # ЗАГОЛОВОК (имя автора) - тот же размер, жирный, жёлтый
+    header_font = get_font(font_size, bold=True)
+    header_text = author_name.upper()
+    bbox_header = draw.textbbox((0, 0), header_text, font=header_font)
+    header_width = bbox_header[2] - bbox_header[0]
+    x_header = (width - header_width) // 2
+    y_header = 40
+    
+    # Обводка для заголовка
+    for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
+        draw.text((x_header + offset[0], y_header + offset[1]), header_text, font=header_font, fill=(0,0,0))
+    draw.text((x_header, y_header), header_text, font=header_font, fill=(255, 255, 100))  # Жёлтый
+    
+    # Основной текст - тот же размер, белый
+    font_main = get_font(font_size, bold=True)
     
     # Разбиваем на строки
     lines = []
@@ -148,9 +152,14 @@ def create_demotivator(text, author_name, background_img=None):
     
     for word in words:
         current_line.append(word)
-        if len(current_line) >= 3 or len(' '.join(current_line)) > 20:
-            lines.append(' '.join(current_line))
-            current_line = []
+        # Проверяем ширину строки
+        temp_line = ' '.join(current_line)
+        bbox = draw.textbbox((0, 0), temp_line, font=font_main)
+        if bbox[2] - bbox[0] > 900:
+            current_line.pop()
+            if current_line:
+                lines.append(' '.join(current_line))
+            current_line = [word]
     
     if current_line:
         lines.append(' '.join(current_line))
@@ -158,18 +167,18 @@ def create_demotivator(text, author_name, background_img=None):
     final_text = '\n'.join(lines)
     
     # Центрируем основной текст
-    bbox = draw.multiline_textbbox((0, 0), final_text, font=font_big, align="center")
+    bbox = draw.multiline_textbbox((0, 0), final_text, font=font_main, align="center")
     text_width = bbox[2] - bbox[0]
     
     x = (width - text_width) // 2
-    y = height - 180  # Поднял повыше
+    y = height - 250
     
-    # Обводка (поменьше)
+    # Обводка для основного текста
     for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
         draw.multiline_text(
             (x + offset[0], y + offset[1]), 
             final_text, 
-            font=font_big, 
+            font=font_main, 
             fill=(0, 0, 0),
             align="center"
         )
@@ -178,21 +187,10 @@ def create_demotivator(text, author_name, background_img=None):
     draw.multiline_text(
         (x, y), 
         final_text, 
-        font=font_big, 
+        font=font_main, 
         fill=(255, 255, 255),
         align="center"
     )
-    
-    # Автор снизу
-    author_footer = f"— {author_name}"
-    bbox_author = draw.textbbox((0, 0), author_footer, font=font_small)
-    author_width = bbox_author[2] - bbox_author[0]
-    x_author = (width - author_width) // 2
-    y_author = y + 60
-    
-    for offset in [(-1,-1), (1,-1), (-1,1), (1,1)]:
-        draw.text((x_author + offset[0], y_author + offset[1]), author_footer, font=font_small, fill=(0,0,0))
-    draw.text((x_author, y_author), author_footer, font=font_small, fill=(180,180,180))
     
     return canvas
 
@@ -201,12 +199,12 @@ async def on_message(message):
     if message.author == bot.user:
         return
     
-    # Сохраняем сообщения от 1 до 6 слов
+    # Сохраняем сообщения до 20 слов
     if message.content and not message.content.startswith('v1!'):
         words = message.content.strip().split()
         word_count = len(words)
         
-        if 1 <= word_count <= 6:
+        if 1 <= word_count <= 20:
             message_history.append({
                 'text': message.content.upper(),
                 'author': message.author.display_name,
@@ -222,7 +220,7 @@ async def dem_command(ctx):
     """Создать демотиватор из случайного сообщения"""
     
     if len(message_history) == 0:
-        await ctx.send("В истории пока нет сообщений. Напиши что-нибудь (1-6 слов).")
+        await ctx.send("В истории пока нет сообщений. Напиши что-нибудь (до 20 слов).")
         return
     
     async with ctx.typing():
@@ -296,7 +294,7 @@ async def dem_help_command(ctx):
     """Помощь"""
     embed = discord.Embed(
         title="ДЕМОТИВАТОР БОТ",
-        description="Превращает короткие сообщения (1-6 слов) в демотиваторы",
+        description="Превращает сообщения (до 20 слов) в демотиваторы",
         color=0xff5500
     )
     embed.add_field(
@@ -309,13 +307,13 @@ async def dem_help_command(ctx):
         ),
         inline=False
     )
-    embed.set_footer(text="Пиши коротко и ясно")
+    embed.set_footer(text="Пиши в чат")
     await ctx.send(embed=embed)
 
 @bot.event
 async def on_ready():
     print(f"Бот {bot.user} готов!")
-    print(f"Сохраняю сообщения от 1 до 6 слов")
+    print(f"Сохраняю сообщения до 20 слов")
     
     await bot.change_presence(
         activity=discord.Activity(
