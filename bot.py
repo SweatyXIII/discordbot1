@@ -82,8 +82,29 @@ def get_font(size, bold=False):
     
     return ImageFont.load_default()
 
-def create_demotivator(text, author_name, background_img=None):
-    """Создаёт демотиватор: заголовок (автор) + основной текст (одинаковый размер)"""
+def wrap_text(text, font, draw, max_width):
+    """Разбивает текст на строки по ширине"""
+    words = text.split()
+    lines = []
+    current_line = []
+    
+    for word in words:
+        current_line.append(word)
+        temp_line = ' '.join(current_line)
+        bbox = draw.textbbox((0, 0), temp_line, font=font)
+        if bbox[2] - bbox[0] > max_width:
+            current_line.pop()
+            if current_line:
+                lines.append(' '.join(current_line))
+            current_line = [word]
+    
+    if current_line:
+        lines.append(' '.join(current_line))
+    
+    return lines
+
+def create_demotivator(header_text, main_text, background_img=None):
+    """Создаёт демотиватор с заголовком и основным текстом одинакового размера"""
     width, height = 1200, 1000
     img_width, img_height = 1000, 600
     
@@ -113,9 +134,9 @@ def create_demotivator(text, author_name, background_img=None):
         width=4
     )
     
-    # Определяем размер шрифта в зависимости от длины текста
-    words = text.split()
-    word_count = len(words)
+    # Определяем размер шрифта на основе длины основного текста
+    main_words = main_text.split()
+    word_count = len(main_words)
     
     if word_count <= 2:
         font_size = 70
@@ -130,63 +151,65 @@ def create_demotivator(text, author_name, background_img=None):
     else:
         font_size = 32
     
-    # ЗАГОЛОВОК (имя автора) - тот же размер, жирный, жёлтый
-    header_font = get_font(font_size, bold=True)
-    header_text = author_name.upper()
-    bbox_header = draw.textbbox((0, 0), header_text, font=header_font)
+    # Шрифт для всего (одинаковый размер)
+    font_main = get_font(font_size, bold=True)
+    
+    # Максимальная ширина текста (с учетом отступов)
+    max_text_width = width - 100
+    
+    # Разбиваем заголовок на строки
+    header_lines = wrap_text(header_text, font_main, draw, max_text_width)
+    header_final = '\n'.join(header_lines)
+    
+    # Разбиваем основной текст на строки
+    main_lines = wrap_text(main_text, font_main, draw, max_text_width)
+    main_final = '\n'.join(main_lines)
+    
+    # ОТСТУПЫ - одинаковые для обоих текстов
+    header_y = 50  # Отступ заголовка от верхнего края
+    main_y = height - 250  # Отступ основного текста от нижнего края
+    
+    # Рисуем заголовок (белый)
+    bbox_header = draw.multiline_textbbox((0, 0), header_final, font=font_main, align="center")
     header_width = bbox_header[2] - bbox_header[0]
     x_header = (width - header_width) // 2
-    y_header = 40
     
     # Обводка для заголовка
     for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
-        draw.text((x_header + offset[0], y_header + offset[1]), header_text, font=header_font, fill=(0,0,0))
-    draw.text((x_header, y_header), header_text, font=header_font, fill=(255, 255, 100))  # Жёлтый
-    
-    # Основной текст - тот же размер, белый
-    font_main = get_font(font_size, bold=True)
-    
-    # Разбиваем на строки
-    lines = []
-    current_line = []
-    
-    for word in words:
-        current_line.append(word)
-        # Проверяем ширину строки
-        temp_line = ' '.join(current_line)
-        bbox = draw.textbbox((0, 0), temp_line, font=font_main)
-        if bbox[2] - bbox[0] > 900:
-            current_line.pop()
-            if current_line:
-                lines.append(' '.join(current_line))
-            current_line = [word]
-    
-    if current_line:
-        lines.append(' '.join(current_line))
-    
-    final_text = '\n'.join(lines)
-    
-    # Центрируем основной текст
-    bbox = draw.multiline_textbbox((0, 0), final_text, font=font_main, align="center")
-    text_width = bbox[2] - bbox[0]
-    
-    x = (width - text_width) // 2
-    y = height - 250
-    
-    # Обводка для основного текста
-    for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
         draw.multiline_text(
-            (x + offset[0], y + offset[1]), 
-            final_text, 
+            (x_header + offset[0], header_y + offset[1]), 
+            header_final, 
             font=font_main, 
             fill=(0, 0, 0),
             align="center"
         )
     
-    # Белый текст
     draw.multiline_text(
-        (x, y), 
-        final_text, 
+        (x_header, header_y), 
+        header_final, 
+        font=font_main, 
+        fill=(255, 255, 255),
+        align="center"
+    )
+    
+    # Рисуем основной текст (белый)
+    bbox_main = draw.multiline_textbbox((0, 0), main_final, font=font_main, align="center")
+    main_width = bbox_main[2] - bbox_main[0]
+    x_main = (width - main_width) // 2
+    
+    # Обводка для основного текста
+    for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
+        draw.multiline_text(
+            (x_main + offset[0], main_y + offset[1]), 
+            main_final, 
+            font=font_main, 
+            fill=(0, 0, 0),
+            align="center"
+        )
+    
+    draw.multiline_text(
+        (x_main, main_y), 
+        main_final, 
         font=font_main, 
         fill=(255, 255, 255),
         align="center"
@@ -217,17 +240,23 @@ async def on_message(message):
 
 @bot.command(name="dem")
 async def dem_command(ctx):
-    """Создать демотиватор из случайного сообщения"""
+    """Создать демотиватор из двух случайных сообщений"""
     
-    if len(message_history) == 0:
-        await ctx.send("В истории пока нет сообщений. Напиши что-нибудь (до 20 слов).")
+    if len(message_history) < 2:
+        await ctx.send("Нужно минимум 2 сообщения в базе. Пиши что-нибудь!")
         return
     
     async with ctx.typing():
-        msg_data = random.choice(list(message_history))
+        # Выбираем два РАЗНЫХ случайных сообщения
+        msg1, msg2 = random.sample(list(message_history), 2)
+        
+        # Заголовок - текст первого сообщения
+        header_text = msg1['text']
+        # Основной текст - текст второго сообщения
+        main_text = msg2['text']
         
         bg = await download_random_image()
-        img = create_demotivator(msg_data['text'], msg_data['author'], bg)
+        img = create_demotivator(header_text, main_text, bg)
         
         img_buffer = io.BytesIO()
         img.save(img_buffer, format='PNG')
@@ -294,13 +323,13 @@ async def dem_help_command(ctx):
     """Помощь"""
     embed = discord.Embed(
         title="ДЕМОТИВАТОР БОТ",
-        description="Превращает сообщения (до 20 слов) в демотиваторы",
+        description="Берёт два случайных сообщения: верхнее и нижнее",
         color=0xff5500
     )
     embed.add_field(
         name="Команды",
         value=(
-            "dem - случайный демотиватор\n"
+            "dem - случайный демотиватор (2 разных сообщения)\n"
             "dem_last - последние сообщения\n"
             "dem_stats - статистика\n"
             "dem_help - помощь"
