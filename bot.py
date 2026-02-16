@@ -263,27 +263,5 @@ async def on_ready():
         )
     )
 
-@bot.command(name="help")
-async def help_text_command(ctx):
-    embed = discord.Embed(
-        title="🤖 SERVER MONITOR BOT",
-        description="Бот для проверки доступности серверов и сайтов",
-        color=0x5865F2
-    )
-    
-    embed.add_field(
-        name="📋 **Команды**",
-        value=(
-            "`/help` - Показать это сообщение\n"
-            "`/ping` - Проверить задержку бота\n"
-            "`/check` - Проверить все игровые сервисы\n"
-            "`/check_service [название]` - Проверить конкретный сервис\n"
-            "`/checklink [url]` - Проверить любую ссылку"
-        ),
-        inline=False
-    )
-    
-    await ctx.send(embed=embed)
-
 if __name__ == "__main__":
     bot.run(TOKEN)
