@@ -104,22 +104,72 @@ def wrap_text(text, font, draw, max_width):
     return lines
 
 def create_demotivator(header_text, main_text, background_img=None):
-    """Создаёт демотиватор с заголовком и основным текстом одинакового размера"""
+    """Создаёт демотиватор: заголовок -> картинка -> основной текст"""
     width, height = 1200, 1000
     img_width, img_height = 1000, 600
     
     canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
     
+    # Определяем размер шрифта на основе длины текста
+    all_words = (header_text + " " + main_text).split()
+    total_words = len(all_words)
+    
+    if total_words <= 4:
+        font_size = 70
+    elif total_words <= 8:
+        font_size = 60
+    elif total_words <= 12:
+        font_size = 50
+    elif total_words <= 20:
+        font_size = 45
+    elif total_words <= 30:
+        font_size = 38
+    else:
+        font_size = 32
+    
+    font_main = get_font(font_size, bold=True)
+    
+    # Максимальная ширина текста
+    max_text_width = width - 100
+    
+    # Разбиваем тексты на строки
+    header_lines = wrap_text(header_text, font_main, ImageDraw.Draw(canvas), max_text_width)
+    main_lines = wrap_text(main_text, font_main, ImageDraw.Draw(canvas), max_text_width)
+    
+    header_final = '\n'.join(header_lines)
+    main_final = '\n'.join(main_lines)
+    
+    # Временный draw для измерения высоты текста
+    temp_draw = ImageDraw.Draw(canvas)
+    
+    # Высота заголовка
+    bbox_header = temp_draw.multiline_textbbox((0, 0), header_final, font=font_main)
+    header_height = bbox_header[3] - bbox_header[1]
+    
+    # Высота основного текста
+    bbox_main = temp_draw.multiline_textbbox((0, 0), main_final, font=font_main)
+    main_height = bbox_main[3] - bbox_main[1]
+    
+    # Расчет позиций для равномерного распределения
+    total_height = header_height + img_height + main_height
+    start_y = (height - total_height) // 2
+    
+    # Позиции элементов
+    header_y = start_y
+    img_y = header_y + header_height + 30  # +30 отступ после заголовка
+    main_y = img_y + img_height + 30  # +30 отступ после картинки
+    
+    # Рисуем фон (если есть)
     if background_img:
         bg_resized = background_img.resize((img_width, img_height))
-        canvas.paste(bg_resized, ((width - img_width)//2, 120))
+        canvas.paste(bg_resized, ((width - img_width)//2, img_y))
     else:
-        # Градиент
+        # Градиент для картинки
         for i in range(img_height):
             color = int(50 + (i / img_height) * 100)
             draw_temp = ImageDraw.Draw(canvas)
             draw_temp.rectangle(
-                [(width - img_width)//2, 120 + i, (width + img_width)//2, 120 + i + 1],
+                [(width - img_width)//2, img_y + i, (width + img_width)//2, img_y + i + 1],
                 fill=(color, color, color)
             )
     
@@ -127,54 +177,18 @@ def create_demotivator(header_text, main_text, background_img=None):
     
     # Рамка вокруг картинки
     frame_x = (width - img_width)//2 - 5
-    frame_y = 115
+    frame_y = img_y - 5
     draw.rectangle(
         [frame_x, frame_y, frame_x + img_width + 10, frame_y + img_height + 10],
         outline=(255, 255, 255),
         width=4
     )
     
-    # Определяем размер шрифта на основе длины основного текста
-    main_words = main_text.split()
-    word_count = len(main_words)
-    
-    if word_count <= 2:
-        font_size = 70
-    elif word_count <= 4:
-        font_size = 60
-    elif word_count <= 6:
-        font_size = 50
-    elif word_count <= 10:
-        font_size = 45
-    elif word_count <= 15:
-        font_size = 38
-    else:
-        font_size = 32
-    
-    # Шрифт для всего (одинаковый размер)
-    font_main = get_font(font_size, bold=True)
-    
-    # Максимальная ширина текста (с учетом отступов)
-    max_text_width = width - 100
-    
-    # Разбиваем заголовок на строки
-    header_lines = wrap_text(header_text, font_main, draw, max_text_width)
-    header_final = '\n'.join(header_lines)
-    
-    # Разбиваем основной текст на строки
-    main_lines = wrap_text(main_text, font_main, draw, max_text_width)
-    main_final = '\n'.join(main_lines)
-    
-    # ОТСТУПЫ - одинаковые для обоих текстов
-    header_y = 50  # Отступ заголовка от верхнего края
-    main_y = height - 250  # Отступ основного текста от нижнего края
-    
     # Рисуем заголовок (белый)
     bbox_header = draw.multiline_textbbox((0, 0), header_final, font=font_main, align="center")
     header_width = bbox_header[2] - bbox_header[0]
     x_header = (width - header_width) // 2
     
-    # Обводка для заголовка
     for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
         draw.multiline_text(
             (x_header + offset[0], header_y + offset[1]), 
@@ -197,7 +211,6 @@ def create_demotivator(header_text, main_text, background_img=None):
     main_width = bbox_main[2] - bbox_main[0]
     x_main = (width - main_width) // 2
     
-    # Обводка для основного текста
     for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
         draw.multiline_text(
             (x_main + offset[0], main_y + offset[1]), 
