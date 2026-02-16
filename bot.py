@@ -262,8 +262,8 @@ async def on_ready():
             name="/check | /checklink"
         )
     )
-@bot.command(name="help")
 
+@bot.command(name="help")
 async def help_text_command(ctx):
     embed = discord.Embed(
         title="🤖 SERVER MONITOR BOT",
