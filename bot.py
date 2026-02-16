@@ -1,148 +1,171 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 from PIL import Image, ImageDraw, ImageFont
 import io
 import random
 import aiohttp
-import asyncio
 import os
-from datetime import datetime
 from dotenv import load_dotenv
+from collections import deque
+import datetime
+from threading import Thread
+from flask import Flask
 
 load_dotenv()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-# Хранилище фраз
-phrases = [
-    "ЖИЗНЬ",
-    "СДЕЛАЛ ДЕЛО - ГУЛЯЙ СМЕЛО",
-    "КОГДА ПРОСНУЛСЯ А ВЫХОДНОЙ",
-    "ПОНЕДЕЛЬНИК",
-    "КОФЕ - ЭТО ЖИДКАЯ ВАЛЮТА",
-    "ПОЧЕМУ НЕ СПИШЬ? РАБОТАЙ!"
-]
+# Flask app для поддержания жизни
+app = Flask(__name__)
 
-# Список источников картинок
-IMAGE_SOURCES = [
-    "https://picsum.photos/800/600",  # Random photos
-    "https://picsum.photos/800/600?grayscale",
-    "https://picsum.photos/800/600?blur"
-]
+@app.route('/')
+def home():
+    return "Demotivator Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
+
+# Запускаем Flask в отдельном потоке
+flask_thread = Thread(target=run_flask, daemon=True)
+flask_thread.start()
+
+# Хранилище сообщений
+message_history = deque(maxlen=500)
 
 class DemotivatorBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.messages = True
-        super().__init__(command_prefix=['!', 'v1!'], intents=intents)
-    
-    async def setup_hook(self):
-        await self.tree.sync()
-        print(f"✅ Бот {self.user} запущен!")
-        print(f"📡 Фраз в базе: {len(phrases)}")
+        super().__init__(command_prefix='v1!', intents=intents)
 
 bot = DemotivatorBot()
 
 async def download_random_image():
-    """
-    Скачивает случайную картинку из интернета
-    """
-    url = random.choice(IMAGE_SOURCES)
-    
+    """Скачивает случайную картинку"""
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as response:
-                if response.status == 200:
-                    image_data = await response.read()
-                    img = Image.open(io.BytesIO(image_data))
-                    # Изменяем размер для демотиватора
-                    img = img.resize((800, 600), Image.Resampling.LANCZOS)
-                    return img
-                else:
-                    print(f"Ошибка загрузки: {response.status}")
-                    return None
-    except Exception as e:
-        print(f"Ошибка при загрузке картинки: {e}")
+            url = "https://picsum.photos/1024/768"
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    img_data = await resp.read()
+                    img = Image.open(io.BytesIO(img_data))
+                    return img.resize((1024, 768))
+    except:
         return None
 
-def create_demotivator_with_image(text, background_img):
-    """
-    Создаёт демотиватор с фоном из скачанной картинки
-    """
-    # Создаём холст для демотиватора (с рамкой)
-    width, height = 900, 700
+def get_font(size, bold=False):
+    """Пытается найти шрифт с поддержкой русского"""
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "arial.ttf"
+    ]
+    
+    if bold:
+        font_paths = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "arialbd.ttf"
+        ]
+    
+    for path in font_paths:
+        try:
+            return ImageFont.truetype(path, size)
+        except:
+            continue
+    
+    return ImageFont.load_default()
+
+def create_demotivator(text, author_name, background_img=None):
+    """Создаёт демотиватор с БОЛЬШИМ русским текстом"""
+    width, height = 1200, 1000
+    img_width, img_height = 1000, 600
+    
     canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
     
-    # Вставляем картинку в центр с отступами
-    img_x = (width - 800) // 2
-    img_y = 50
-    canvas.paste(background_img, (img_x, img_y))
+    if background_img:
+        bg_resized = background_img.resize((img_width, img_height))
+        canvas.paste(bg_resized, ((width - img_width)//2, 80))
     
-    # Рисуем белую рамку вокруг картинки
     draw = ImageDraw.Draw(canvas)
+    
+    # Рамка
+    frame_x = (width - img_width)//2 - 5
+    frame_y = 75
     draw.rectangle(
-        [img_x-2, img_y-2, img_x+802, img_y+602],
+        [frame_x, frame_y, frame_x + img_width + 10, frame_y + img_height + 10],
         outline=(255, 255, 255),
-        width=3
+        width=4
     )
     
-    # Пробуем загрузить шрифты
-    try:
-        font_big = ImageFont.truetype("arial.ttf", 48)
-        font_small = ImageFont.truetype("arial.ttf", 24)
-    except:
-        font_big = ImageFont.load_default()
-        font_small = ImageFont.load_default()
-    
-    # Разбиваем текст на строки
+    # Определяем размер шрифта
     words = text.split()
+    word_count = len(words)
+    
+    if word_count <= 2:
+        font_size = 140
+    elif word_count <= 3:
+        font_size = 120
+    elif word_count <= 4:
+        font_size = 100
+    else:
+        font_size = 80
+    
+    font_big = get_font(font_size, bold=True)
+    font_small = get_font(30)
+    
+    # Разбиваем на строки
     lines = []
     current_line = []
     
     for word in words:
         current_line.append(word)
-        if len(' '.join(current_line)) > 20:
-            current_line.pop()
+        if len(current_line) >= 3:
             lines.append(' '.join(current_line))
-            current_line = [word]
+            current_line = []
     
     if current_line:
         lines.append(' '.join(current_line))
     
-    # Определяем верхний и нижний текст
-    if len(lines) >= 2:
-        upper_text = lines[0]
-        lower_text = ' '.join(lines[1:])
-    else:
-        upper_text = text
-        lower_text = " "
+    final_text = '\n'.join(lines)
     
-    # Рисуем верхний текст (большой, белый)
-    bbox = draw.textbbox((0, 0), upper_text, font=font_big)
+    # Центрируем текст
+    bbox = draw.multiline_textbbox((0, 0), final_text, font=font_big, align="center")
     text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
     
     x = (width - text_width) // 2
-    y = img_y + 620
+    y = height - 300
     
-    # Обводка для верхнего текста
+    # Обводка
+    for offset in [(-5,-5), (5,-5), (-5,5), (5,5), (-3,-3), (3,-3), (-3,3), (3,3)]:
+        draw.multiline_text(
+            (x + offset[0], y + offset[1]), 
+            final_text, 
+            font=font_big, 
+            fill=(0, 0, 0),
+            align="center"
+        )
+    
+    # Белый текст
+    draw.multiline_text(
+        (x, y), 
+        final_text, 
+        font=font_big, 
+        fill=(255, 255, 255),
+        align="center"
+    )
+    
+    # Автор
+    author_text = f"— {author_name}"
+    bbox_author = draw.textbbox((0, 0), author_text, font=font_small)
+    author_width = bbox_author[2] - bbox_author[0]
+    x_author = (width - author_width) // 2
+    y_author = y + 130
+    
     for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
-        draw.text((x+offset[0], y+offset[1]), upper_text, font=font_big, fill=(0,0,0))
-    draw.text((x, y), upper_text, font=font_big, fill=(255,255,255))
-    
-    # Рисуем нижний текст (маленький, серый)
-    if lower_text.strip():
-        bbox_small = draw.textbbox((0, 0), lower_text, font=font_small)
-        text_width_small = bbox_small[2] - bbox_small[0]
-        
-        x_small = (width - text_width_small) // 2
-        y_small = y + 50
-        
-        for offset in [(-1,-1), (1,-1), (-1,1), (1,1)]:
-            draw.text((x_small+offset[0], y_small+offset[1]), lower_text, font=font_small, fill=(0,0,0))
-        draw.text((x_small, y_small), lower_text, font=font_small, fill=(200,200,200))
+        draw.text((x_author + offset[0], y_author + offset[1]), author_text, font=font_small, fill=(0,0,0))
+    draw.text((x_author, y_author), author_text, font=font_small, fill=(180,180,180))
     
     return canvas
 
@@ -151,134 +174,101 @@ async def on_message(message):
     if message.author == bot.user:
         return
     
-    # Сохраняем сообщения в базу
-    if not message.content.startswith('!'):
-        msg = message.content.strip().upper()[:50]
-        if len(msg) > 5:
-            phrases.append(msg)
-            if len(phrases) > 1000:
-                phrases.pop(0)
-            print(f"📝 Добавлена фраза: {msg} (всего: {len(phrases)})")
+    if message.content and not message.content.startswith('v1!'):
+        words = message.content.strip().split()
+        word_count = len(words)
+        
+        if 2 <= word_count <= 6:
+            message_history.append({
+                'text': message.content.upper(),
+                'author': message.author.display_name,
+                'time': datetime.datetime.now(),
+                'words': word_count
+            })
+            print(f"📝 Добавлено ({word_count} слов): {message.content[:30]}...")
     
     await bot.process_commands(message)
 
 @bot.command(name="dem")
-async def demotivator_command(ctx, *, text=None):
-    """Создать демотиватор из текста или случайной фразы (с картинкой из интернета)"""
+async def dem_command(ctx):
+    if len(message_history) == 0:
+        await ctx.send("❌ В истории пока нет сообщений! Напиши что-нибудь (2-6 слов).")
+        return
+    
     async with ctx.typing():
-        # Определяем текст
-        if text:
-            phrase = text.upper()
-        else:
-            if phrases:
-                phrase = random.choice(phrases)
-            else:
-                phrase = "НЕТ ФРАЗ В БАЗЕ"
+        msg_data = random.choice(list(message_history))
         
-        # Отправляем статус
-        status_msg = await ctx.send("🔄 Загружаю картинку из интернета...")
+        status = await ctx.send(f"🔄 Беру сообщение от {msg_data['author']}...")
         
-        # Скачиваем случайную картинку
-        background = await download_random_image()
+        bg = await download_random_image()
+        img = create_demotivator(msg_data['text'], msg_data['author'], bg)
         
-        if background:
-            await status_msg.edit(content="🖼️ Создаю демотиватор...")
-            # Создаём демотиватор с картинкой
-            img = create_demotivator_with_image(phrase, background)
-        else:
-            await status_msg.edit(content="⚠️ Не удалось загрузить картинку, делаю чёрный фон...")
-            # Если не удалось скачать - делаем с чёрным фоном
-            img = Image.new('RGB', (900, 700), color=(20, 20, 20))
-            draw = ImageDraw.Draw(img)
-            draw.rectangle([(50, 50), (850, 550)], outline=(255, 255, 255), width=3)
-            
-            # Простой текст для чёрного фона
-            try:
-                font = ImageFont.truetype("arial.ttf", 60)
-            except:
-                font = ImageFont.load_default()
-            
-            bbox = draw.textbbox((0, 0), phrase, font=font)
-            text_width = bbox[2] - bbox[0]
-            x = (900 - text_width) // 2
-            y = 300
-            
-            draw.text((x, y), phrase, font=font, fill=(255,255,255))
-        
-        # Сохраняем в буфер
         img_buffer = io.BytesIO()
         img.save(img_buffer, format='PNG')
         img_buffer.seek(0)
         
-        # Удаляем статус
-        await status_msg.delete()
+        await status.delete()
         
-        # Отправляем результат
         file = discord.File(img_buffer, filename='demotivator.png')
-        await ctx.send(f"**{phrase}**", file=file)
+        await ctx.send(f"**{msg_data['text']}**\n— {msg_data['author']}", file=file)
 
-@bot.command(name="dem_help")
-async def dem_help_command(ctx):
-    """Помощь по демотиватору"""
-    embed = discord.Embed(
-        title="🎭 Демотиватор Бот",
-        description="Создаёт демотиваторы из сообщений в чате со случайными картинками из интернета",
-        color=0x00ff00
-    )
-    embed.add_field(
-        name="Команды",
-        value=(
-            "`!dem` - Случайный демотиватор из базы\n"
-            "`!dem [текст]` - Демотиватор с твоим текстом\n"
-            "`!dem_stats` - Статистика фраз\n"
-            "`!dem_help` - Это сообщение"
-        ),
-        inline=False
-    )
-    embed.add_field(
-        name="🌐 Картинки",
-        value=(
-            "Бот скачивает случайные фото с **picsum.photos**\n"
-            "Если картинка не грузится - делает чёрный фон"
-        ),
-        inline=False
-    )
+@bot.command(name="dem_last")
+async def dem_last_command(ctx):
+    if len(message_history) == 0:
+        await ctx.send("❌ История пуста")
+        return
+    
+    last_messages = list(message_history)[-10:]
+    
+    embed = discord.Embed(title="📜 Последние сообщения", color=0x3498db)
+    for msg in reversed(last_messages):
+        embed.add_field(
+            name=f"{msg['author']} ({msg['words']} сл.)",
+            value=msg['text'][:50],
+            inline=False
+        )
+    
     await ctx.send(embed=embed)
 
 @bot.command(name="dem_stats")
 async def dem_stats_command(ctx):
-    """Статистика базы фраз"""
+    embed = discord.Embed(title="📊 Статистика", color=0x00ff00)
+    embed.add_field(name="Сообщений в базе", value=str(len(message_history)), inline=True)
+    
+    if message_history:
+        word_dist = {}
+        for msg in message_history:
+            word_dist[msg['words']] = word_dist.get(msg['words'], 0) + 1
+        
+        dist_text = "\n".join([f"{w} слов: {c}" for w, c in sorted(word_dist.items())])
+        embed.add_field(name="Распределение", value=dist_text, inline=True)
+    
+    await ctx.send(embed=embed)
+
+@bot.command(name="dem_help")
+async def dem_help_command(ctx):
     embed = discord.Embed(
-        title="📊 Статистика демотиватора",
-        color=0x3498db
+        title="🎭 ДЕМОТИВАТОР БОТ",
+        description="Превращает короткие сообщения (2-6 слов) в демотиваторы",
+        color=0xff5500
     )
-    embed.add_field(name="Всего фраз", value=str(len(phrases)), inline=True)
-    
-    if phrases:
-        # Последние 5 фраз
-        last_phrases = "\n".join([f"• {p}" for p in phrases[-5:]])
-        embed.add_field(name="Последние фразы", value=last_phrases, inline=False)
-    
     embed.add_field(
-        name="🌐 Источник картинок",
-        value="picsum.photos (случайные фото)",
-        inline=False
+        name="Команды",
+        value=(
+            "`v1!dem` - случайный демотиватор\n"
+            "`v1!dem_last` - последние сообщения\n"
+            "`v1!dem_stats` - статистика\n"
+            "`v1!dem_help` - помощь"
+        )
     )
-    
     await ctx.send(embed=embed)
 
 @bot.event
 async def on_ready():
-    print(f"🤖 {bot.user} подключился!")
-    print(f"📡 Серверов: {len(bot.guilds)}")
-    print(f"💬 Фраз в базе: {len(phrases)}")
-    print(f"🌐 Источник картинок: picsum.photos")
-    
+    print(f"✅ Бот {bot.user} готов!")
+    print(f"📡 Поддерживает русский язык")
     await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.listening,
-            name="!dem | Картинки из сети"
-        )
+        activity=discord.Activity(type=discord.ActivityType.watching, name="чат | v1!dem")
     )
 
 if __name__ == "__main__":
