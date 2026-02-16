@@ -79,7 +79,7 @@ def get_font(size, bold=False):
     return ImageFont.load_default()
 
 def create_demotivator(text, author_name, background_img=None):
-    """Создаёт демотиватор с БОЛЬШИМ русским текстом"""
+    """Создаёт демотиватор с текстом нормального размера"""
     width, height = 1200, 1000
     img_width, img_height = 1000, 600
     
@@ -100,21 +100,21 @@ def create_demotivator(text, author_name, background_img=None):
         width=4
     )
     
-    # Определяем размер шрифта
+    # **НОВЫЕ РАЗМЕРЫ: поменьше**
     words = text.split()
     word_count = len(words)
     
     if word_count <= 2:
-        font_size = 140
+        font_size = 90   # Было 140
     elif word_count <= 3:
-        font_size = 120
+        font_size = 80   # Было 120
     elif word_count <= 4:
-        font_size = 100
+        font_size = 70   # Было 100
     else:
-        font_size = 80
+        font_size = 60   # Было 80
     
     font_big = get_font(font_size, bold=True)
-    font_small = get_font(30)
+    font_small = get_font(24)  # Поменьше для автора
     
     # Разбиваем на строки
     lines = []
@@ -122,7 +122,8 @@ def create_demotivator(text, author_name, background_img=None):
     
     for word in words:
         current_line.append(word)
-        if len(current_line) >= 3:
+        # По 2-3 слова в строке, но не больше
+        if len(current_line) >= 3 or len(' '.join(current_line)) > 20:
             lines.append(' '.join(current_line))
             current_line = []
     
@@ -134,12 +135,14 @@ def create_demotivator(text, author_name, background_img=None):
     # Центрируем текст
     bbox = draw.multiline_textbbox((0, 0), final_text, font=font_big, align="center")
     text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
     
     x = (width - text_width) // 2
-    y = height - 300
+    # Текст выше, чтобы точно влезал
+    y = height - 280  # Можно регулировать
     
     # Обводка
-    for offset in [(-5,-5), (5,-5), (-5,5), (5,5), (-3,-3), (3,-3), (-3,3), (3,3)]:
+    for offset in [(-4,-4), (4,-4), (-4,4), (4,4)]:
         draw.multiline_text(
             (x + offset[0], y + offset[1]), 
             final_text, 
@@ -162,13 +165,14 @@ def create_demotivator(text, author_name, background_img=None):
     bbox_author = draw.textbbox((0, 0), author_text, font=font_small)
     author_width = bbox_author[2] - bbox_author[0]
     x_author = (width - author_width) // 2
-    y_author = y + 130
+    y_author = y + 90  # Поднял ближе к тексту
     
-    for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
+    for offset in [(-1,-1), (1,-1), (-1,1), (1,1)]:
         draw.text((x_author + offset[0], y_author + offset[1]), author_text, font=font_small, fill=(0,0,0))
     draw.text((x_author, y_author), author_text, font=font_small, fill=(180,180,180))
     
     return canvas
+
 
 @bot.event
 async def on_message(message):
