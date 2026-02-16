@@ -15,7 +15,7 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-# Flask app для поддержания жизни
+# Flask app для поддержания жизн
 app = Flask(__name__)
 
 @app.route('/')
