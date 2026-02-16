@@ -23,7 +23,8 @@ def home():
     return "Demotivator Bot is running!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=10000)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
 
 # Запускаем Flask в отдельном потоке
 flask_thread = Thread(target=run_flask, daemon=True)
