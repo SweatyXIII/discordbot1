@@ -235,22 +235,13 @@ def create_demotivator(header_text, main_text, background_img=None):
     return canvas
 
 def create_personal_demotivator(header_text, main_text, avatar_img=None):
-    """Создаёт персональный демотиватор с аватаркой на весь фон"""
+    """Создаёт персональный демотиватор с аватаркой на весь фон и текстом с обводкой"""
     width, height = 1200, 1200
     
     # Создаём холст
     if avatar_img:
         # Растягиваем аватарку на весь фон
-        bg = avatar_img.resize((width, height))
-        
-        # Добавляем небольшое размытие для эффекта
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=2))
-        
-        # Затемняем для читаемости текста
-        canvas = Image.new('RGBA', (width, height), (0, 0, 0, 180))
-        bg = bg.convert('RGBA')
-        bg = Image.alpha_composite(bg, canvas)
-        canvas = bg.convert('RGB')
+        canvas = avatar_img.resize((width, height)).convert('RGB')
     else:
         # Градиент если нет аватарки
         canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
@@ -288,19 +279,22 @@ def create_personal_demotivator(header_text, main_text, avatar_img=None):
     header_y = 150
     main_y = height - 300
     
-    # Заголовок сверху
+    # Заголовок сверху с обводкой
     bbox_header = draw.multiline_textbbox((0, 0), header_final, font=font_main, align="center")
     header_width = bbox_header[2] - bbox_header[0]
-    header_height = bbox_header[3] - bbox_header[1]
     x_header = (width - header_width) // 2
     
-    # Полупрозрачный фон под заголовок
-    draw.rectangle(
-        [x_header - 30, header_y - 15, x_header + header_width + 30, header_y + header_height + 15],
-        fill=(0, 0, 0, 200)
-    )
+    # Тонкая чёрная обводка (2px)
+    for offset in [(-2,-2), (2,-2), (-2,2), (2,2), (0,-2), (0,2), (-2,0), (2,0)]:
+        draw.multiline_text(
+            (x_header + offset[0], header_y + offset[1]), 
+            header_final, 
+            font=font_main, 
+            fill=(0, 0, 0),
+            align="center"
+        )
     
-    # Текст заголовка
+    # Белый текст
     draw.multiline_text(
         (x_header, header_y), 
         header_final, 
@@ -309,19 +303,22 @@ def create_personal_demotivator(header_text, main_text, avatar_img=None):
         align="center"
     )
     
-    # Основной текст снизу
+    # Основной текст снизу с обводкой
     bbox_main = draw.multiline_textbbox((0, 0), main_final, font=font_main, align="center")
     main_width = bbox_main[2] - bbox_main[0]
-    main_height = bbox_main[3] - bbox_main[1]
     x_main = (width - main_width) // 2
     
-    # Полупрозрачный фон под основной текст
-    draw.rectangle(
-        [x_main - 30, main_y - 15, x_main + main_width + 30, main_y + main_height + 15],
-        fill=(0, 0, 0, 200)
-    )
+    # Тонкая чёрная обводка (2px)
+    for offset in [(-2,-2), (2,-2), (-2,2), (2,2), (0,-2), (0,2), (-2,0), (2,0)]:
+        draw.multiline_text(
+            (x_main + offset[0], main_y + offset[1]), 
+            main_final, 
+            font=font_main, 
+            fill=(0, 0, 0),
+            align="center"
+        )
     
-    # Текст
+    # Белый текст
     draw.multiline_text(
         (x_main, main_y), 
         main_final, 
