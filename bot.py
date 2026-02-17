@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import io
 import random
 import aiohttp
@@ -54,12 +54,12 @@ async def download_random_image():
     """Скачивает случайную картинку"""
     try:
         async with aiohttp.ClientSession() as session:
-            url = "https://picsum.photos/1024/768"
+            url = "https://picsum.photos/1200/1200"
             async with session.get(url, timeout=10) as resp:
                 if resp.status == 200:
                     img_data = await resp.read()
                     img = Image.open(io.BytesIO(img_data))
-                    return img.resize((1024, 768))
+                    return img.resize((1200, 1200))
     except:
         return None
 
@@ -235,72 +235,50 @@ def create_demotivator(header_text, main_text, background_img=None):
     return canvas
 
 def create_personal_demotivator(header_text, main_text, author_name, avatar_img=None):
-    """Создаёт персональный демотиватор с аватаркой без рамок"""
+    """Создаёт персональный демотиватор с аватаркой на весь фон"""
     width, height = 1200, 1200
     
-    # Создаём холст с градиентом
-    canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
-    draw = ImageDraw.Draw(canvas)
-    
-    # Градиентный фон
-    for i in range(height):
-        color = int(20 + (i / height) * 40)
-        draw.line([(0, i), (width, i)], fill=(color, color, color))
-    
-    # Размещаем аватарку в центре
-    avatar_size = 400
-    avatar_x = (width - avatar_size) // 2
-    avatar_y = 300
-    
+    # Создаём холст
     if avatar_img:
-        # Делаем аватарку круглой
-        avatar_resized = avatar_img.resize((avatar_size, avatar_size))
-        mask = Image.new('L', (avatar_size, avatar_size), 0)
-        mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+        # Растягиваем аватарку на весь фон
+        bg = avatar_img.resize((width, height))
         
-        circular_avatar = Image.new('RGBA', (avatar_size, avatar_size), (0, 0, 0, 0))
-        circular_avatar.paste(avatar_resized, (0, 0), mask)
-        canvas.paste(circular_avatar, (avatar_x, avatar_y), circular_avatar)
+        # Добавляем небольшое размытие для эффекта
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=2))
         
-        # Светящийся ободок
-        draw.ellipse(
-            [avatar_x-2, avatar_y-2, avatar_x+avatar_size+2, avatar_y+avatar_size+2],
-            outline=(255, 255, 255, 100),
-            width=2
-        )
+        # Затемняем для читаемости текста
+        canvas = Image.new('RGBA', (width, height), (0, 0, 0, 180))
+        bg = bg.convert('RGBA')
+        bg = Image.alpha_composite(bg, canvas)
+        canvas = bg.convert('RGB')
     else:
-        # Заглушка если нет аватарки
-        draw.ellipse(
-            [avatar_x, avatar_y, avatar_x+avatar_size, avatar_y+avatar_size],
-            fill=(50, 50, 50),
-            outline=(255, 255, 255),
-            width=3
-        )
-        initials = author_name[0].upper() if author_name else "?"
-        font_init = get_font(150, bold=True)
-        bbox = draw.textbbox((0, 0), initials, font=font_init)
-        init_x = (width - (bbox[2] - bbox[0])) // 2
-        init_y = avatar_y + (avatar_size - (bbox[3] - bbox[1])) // 2
-        draw.text((init_x, init_y), initials, font=font_init, fill=(255, 255, 255))
+        # Градиент если нет аватарки
+        canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        for i in range(height):
+            color = int(20 + (i / height) * 40)
+            draw.line([(0, i), (width, i)], fill=(color, color, color))
+    
+    draw = ImageDraw.Draw(canvas)
     
     # Определяем размер шрифта
     all_words = (header_text + " " + main_text).split()
     if len(all_words) <= 4:
-        font_size = 60
+        font_size = 80
     elif len(all_words) <= 8:
-        font_size = 50
+        font_size = 70
+    elif len(all_words) <= 12:
+        font_size = 60
     else:
-        font_size = 40
+        font_size = 50
     
-    font_header = get_font(font_size, bold=True)
     font_main = get_font(font_size, bold=True)
     
     # Максимальная ширина текста
     max_text_width = width - 200
     
     # Разбиваем тексты
-    header_lines = wrap_text(header_text, font_header, draw, max_text_width)
+    header_lines = wrap_text(header_text, font_main, draw, max_text_width)
     main_lines = wrap_text(main_text, font_main, draw, max_text_width)
     
     header_final = '\n'.join(header_lines)
@@ -308,30 +286,30 @@ def create_personal_demotivator(header_text, main_text, author_name, avatar_img=
     
     # Позиции текста
     header_y = 150
-    main_y = 900
+    main_y = height - 300
     
-    # Заголовок над аватаркой
-    bbox_header = draw.multiline_textbbox((0, 0), header_final, font=font_header, align="center")
+    # Заголовок сверху
+    bbox_header = draw.multiline_textbbox((0, 0), header_final, font=font_main, align="center")
     header_width = bbox_header[2] - bbox_header[0]
     header_height = bbox_header[3] - bbox_header[1]
     x_header = (width - header_width) // 2
     
     # Полупрозрачный фон под заголовок
     draw.rectangle(
-        [x_header - 20, header_y - 10, x_header + header_width + 20, header_y + header_height + 10],
-        fill=(0, 0, 0, 180)
+        [x_header - 30, header_y - 15, x_header + header_width + 30, header_y + header_height + 15],
+        fill=(0, 0, 0, 200)
     )
     
     # Текст заголовка
     draw.multiline_text(
         (x_header, header_y), 
         header_final, 
-        font=font_header, 
+        font=font_main, 
         fill=(255, 255, 255),
         align="center"
     )
     
-    # Основной текст под аватаркой
+    # Основной текст снизу
     bbox_main = draw.multiline_textbbox((0, 0), main_final, font=font_main, align="center")
     main_width = bbox_main[2] - bbox_main[0]
     main_height = bbox_main[3] - bbox_main[1]
@@ -339,8 +317,8 @@ def create_personal_demotivator(header_text, main_text, author_name, avatar_img=
     
     # Полупрозрачный фон под основной текст
     draw.rectangle(
-        [x_main - 20, main_y - 10, x_main + main_width + 20, main_y + main_height + 10],
-        fill=(0, 0, 0, 180)
+        [x_main - 30, main_y - 15, x_main + main_width + 30, main_y + main_height + 15],
+        fill=(0, 0, 0, 200)
     )
     
     # Текст
@@ -351,6 +329,20 @@ def create_personal_demotivator(header_text, main_text, author_name, avatar_img=
         fill=(255, 255, 255),
         align="center"
     )
+    
+    # Добавляем имя автора мелким текстом
+    font_small = get_font(30)
+    author_text = f"@{author_name}"
+    bbox_author = draw.textbbox((0, 0), author_text, font=font_small)
+    author_width = bbox_author[2] - bbox_author[0]
+    x_author = (width - author_width) // 2
+    y_author = main_y + main_height + 50
+    
+    draw.rectangle(
+        [x_author - 20, y_author - 5, x_author + author_width + 20, y_author + 30],
+        fill=(0, 0, 0, 180)
+    )
+    draw.text((x_author, y_author), author_text, font=font_small, fill=(200, 200, 200))
     
     return canvas
 
@@ -398,7 +390,7 @@ async def dem_command(ctx):
 
 @bot.command(name="me")
 async def me_command(ctx):
-    """Создать персональный демотиватор из своих сообщений с аватаркой"""
+    """Создать персональный демотиватор из своих сообщений с аватаркой на фон"""
     
     # Фильтруем сообщения только этого пользователя
     user_messages = [msg for msg in message_history if msg['author'] == ctx.author.display_name]
@@ -435,6 +427,64 @@ async def me_command(ctx):
         
         file = discord.File(img_buffer, filename='personal_demotivator.png')
         await ctx.send(file=file)
+
+@bot.command(name="random")
+async def random_command(ctx):
+    """Создать демотиватор из сообщений случайного пользователя с его аватаркой"""
+    
+    if len(message_history) < 2:
+        await ctx.send("Нужно минимум 2 сообщения в базе. Пиши что-нибудь!")
+        return
+    
+    async with ctx.typing():
+        # Получаем список всех уникальных авторов
+        authors = list(set([msg['author'] for msg in message_history]))
+        
+        # Выбираем случайного автора
+        random_author = random.choice(authors)
+        
+        # Берём все сообщения этого автора
+        author_messages = [msg for msg in message_history if msg['author'] == random_author]
+        
+        # Если у автора меньше 2 сообщений, берём другого
+        while len(author_messages) < 2:
+            random_author = random.choice(authors)
+            author_messages = [msg for msg in message_history if msg['author'] == random_author]
+        
+        # Выбираем два случайных сообщения
+        msg1, msg2 = random.sample(author_messages, 2)
+        
+        # Пытаемся найти пользователя на сервере по нику
+        target_user = None
+        for member in ctx.guild.members:
+            if member.display_name == random_author or member.name == random_author:
+                target_user = member
+                break
+        
+        # Скачиваем аватарку
+        avatar_img = None
+        if target_user and target_user.avatar:
+            avatar_url = target_user.avatar.url
+            async with aiohttp.ClientSession() as session:
+                async with session.get(avatar_url) as resp:
+                    if resp.status == 200:
+                        avatar_data = await resp.read()
+                        avatar_img = Image.open(io.BytesIO(avatar_data))
+        
+        # Создаём персональный демотиватор
+        img = create_personal_demotivator(
+            msg1['text'], 
+            msg2['text'], 
+            random_author,
+            avatar_img
+        )
+        
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        
+        file = discord.File(img_buffer, filename=f'random_{random_author}.png')
+        await ctx.send(f"**Случайный пользователь: {random_author}**", file=file)
 
 @bot.command(name="dem_last")
 async def dem_last_command(ctx):
@@ -494,14 +544,15 @@ async def dem_help_command(ctx):
     """Помощь"""
     embed = discord.Embed(
         title="ДЕМОТИВАТОР БОТ",
-        description="Два режима: общий и персональный",
+        description="Три режима: общий, личный и случайный",
         color=0xff5500
     )
     embed.add_field(
         name="Команды",
         value=(
-            "dem - случайный демотиватор (2 разных сообщения)\n"
-            "me - персональный демотиватор с твоей аватаркой\n"
+            "dem - случайный демотиватор (2 любых сообщения)\n"
+            "me - твой персональный демотиватор (твоя аватарка на фоне)\n"
+            "random - демотиватор случайного пользователя\n"
             "dem_last - последние сообщения\n"
             "dem_stats - статистика\n"
             "dem_help - помощь"
@@ -515,12 +566,12 @@ async def dem_help_command(ctx):
 async def on_ready():
     print(f"Бот {bot.user} готов!")
     print(f"Сохраняю сообщения до 20 слов")
-    print(f"Доступны команды: dem, me, dem_last, dem_stats, dem_help")
+    print(f"Доступны команды: dem, me, random, dem_last, dem_stats, dem_help")
     
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="чат | v1!dem или v1!me"
+            name="чат | v1!dem, v1!me, v1!random"
         )
     )
 
