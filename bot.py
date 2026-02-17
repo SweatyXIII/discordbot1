@@ -22,6 +22,10 @@ app = Flask(__name__)
 def home():
     return "Demotivator Bot is running!"
 
+@app.route('/healthz')
+def health():
+    return "OK", 200
+
 def run_flask():
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
@@ -85,17 +89,19 @@ def get_font(size, bold=False):
 def wrap_text(text, font, draw, max_width):
     """Разбивает текст на строки по ширине"""
     words = text.split()
-    lines = []
-    current_line = []
+    if not words:
+        return []
     
-    for word in words:
-        current_line.append(word)
-        temp_line = ' '.join(current_line)
+    lines = []
+    current_line = [words[0]]
+    
+    for word in words[1:]:
+        temp_line = ' '.join(current_line + [word])
         bbox = draw.textbbox((0, 0), temp_line, font=font)
-        if bbox[2] - bbox[0] > max_width:
-            current_line.pop()
-            if current_line:
-                lines.append(' '.join(current_line))
+        if bbox[2] - bbox[0] <= max_width:
+            current_line.append(word)
+        else:
+            lines.append(' '.join(current_line))
             current_line = [word]
     
     if current_line:
@@ -104,13 +110,13 @@ def wrap_text(text, font, draw, max_width):
     return lines
 
 def create_demotivator(header_text, main_text, background_img=None):
-    """Создаёт демотиватор: заголовок -> картинка -> основной текст"""
+    """Создаёт обычный демотиватор: заголовок -> картинка -> основной текст"""
     width, height = 1200, 1000
     img_width, img_height = 1000, 600
     
     canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
     
-    # Определяем размер шрифта на основе длины текста
+    # Определяем размер шрифта
     all_words = (header_text + " " + main_text).split()
     total_words = len(all_words)
     
@@ -132,39 +138,37 @@ def create_demotivator(header_text, main_text, background_img=None):
     # Максимальная ширина текста
     max_text_width = width - 100
     
+    # Временный draw для измерений
+    temp_draw = ImageDraw.Draw(canvas)
+    
     # Разбиваем тексты на строки
-    header_lines = wrap_text(header_text, font_main, ImageDraw.Draw(canvas), max_text_width)
-    main_lines = wrap_text(main_text, font_main, ImageDraw.Draw(canvas), max_text_width)
+    header_lines = wrap_text(header_text, font_main, temp_draw, max_text_width)
+    main_lines = wrap_text(main_text, font_main, temp_draw, max_text_width)
     
     header_final = '\n'.join(header_lines)
     main_final = '\n'.join(main_lines)
     
-    # Временный draw для измерения высоты текста
-    temp_draw = ImageDraw.Draw(canvas)
-    
-    # Высота заголовка
+    # Высота текстов
     bbox_header = temp_draw.multiline_textbbox((0, 0), header_final, font=font_main)
     header_height = bbox_header[3] - bbox_header[1]
     
-    # Высота основного текста
     bbox_main = temp_draw.multiline_textbbox((0, 0), main_final, font=font_main)
     main_height = bbox_main[3] - bbox_main[1]
     
-    # Расчет позиций для равномерного распределения
+    # Расчет позиций
     total_height = header_height + img_height + main_height
     start_y = (height - total_height) // 2
     
-    # Позиции элементов
     header_y = start_y
-    img_y = header_y + header_height + 30  # +30 отступ после заголовка
-    main_y = img_y + img_height + 30  # +30 отступ после картинки
+    img_y = header_y + header_height + 30
+    main_y = img_y + img_height + 30
     
-    # Рисуем фон (если есть)
+    # Рисуем фон
     if background_img:
         bg_resized = background_img.resize((img_width, img_height))
         canvas.paste(bg_resized, ((width - img_width)//2, img_y))
     else:
-        # Градиент для картинки
+        # Градиент
         for i in range(img_height):
             color = int(50 + (i / img_height) * 100)
             draw_temp = ImageDraw.Draw(canvas)
@@ -184,7 +188,7 @@ def create_demotivator(header_text, main_text, background_img=None):
         width=4
     )
     
-    # Рисуем заголовок (белый)
+    # Рисуем заголовок
     bbox_header = draw.multiline_textbbox((0, 0), header_final, font=font_main, align="center")
     header_width = bbox_header[2] - bbox_header[0]
     x_header = (width - header_width) // 2
@@ -206,7 +210,7 @@ def create_demotivator(header_text, main_text, background_img=None):
         align="center"
     )
     
-    # Рисуем основной текст (белый)
+    # Рисуем основной текст
     bbox_main = draw.multiline_textbbox((0, 0), main_final, font=font_main, align="center")
     main_width = bbox_main[2] - bbox_main[0]
     x_main = (width - main_width) // 2
@@ -220,6 +224,126 @@ def create_demotivator(header_text, main_text, background_img=None):
             align="center"
         )
     
+    draw.multiline_text(
+        (x_main, main_y), 
+        main_final, 
+        font=font_main, 
+        fill=(255, 255, 255),
+        align="center"
+    )
+    
+    return canvas
+
+def create_personal_demotivator(header_text, main_text, author_name, avatar_img=None):
+    """Создаёт персональный демотиватор с аватаркой без рамок"""
+    width, height = 1200, 1200
+    
+    # Создаём холст с градиентом
+    canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    
+    # Градиентный фон
+    for i in range(height):
+        color = int(20 + (i / height) * 40)
+        draw.line([(0, i), (width, i)], fill=(color, color, color))
+    
+    # Размещаем аватарку в центре
+    avatar_size = 400
+    avatar_x = (width - avatar_size) // 2
+    avatar_y = 300
+    
+    if avatar_img:
+        # Делаем аватарку круглой
+        avatar_resized = avatar_img.resize((avatar_size, avatar_size))
+        mask = Image.new('L', (avatar_size, avatar_size), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+        
+        circular_avatar = Image.new('RGBA', (avatar_size, avatar_size), (0, 0, 0, 0))
+        circular_avatar.paste(avatar_resized, (0, 0), mask)
+        canvas.paste(circular_avatar, (avatar_x, avatar_y), circular_avatar)
+        
+        # Светящийся ободок
+        draw.ellipse(
+            [avatar_x-2, avatar_y-2, avatar_x+avatar_size+2, avatar_y+avatar_size+2],
+            outline=(255, 255, 255, 100),
+            width=2
+        )
+    else:
+        # Заглушка если нет аватарки
+        draw.ellipse(
+            [avatar_x, avatar_y, avatar_x+avatar_size, avatar_y+avatar_size],
+            fill=(50, 50, 50),
+            outline=(255, 255, 255),
+            width=3
+        )
+        initials = author_name[0].upper() if author_name else "?"
+        font_init = get_font(150, bold=True)
+        bbox = draw.textbbox((0, 0), initials, font=font_init)
+        init_x = (width - (bbox[2] - bbox[0])) // 2
+        init_y = avatar_y + (avatar_size - (bbox[3] - bbox[1])) // 2
+        draw.text((init_x, init_y), initials, font=font_init, fill=(255, 255, 255))
+    
+    # Определяем размер шрифта
+    all_words = (header_text + " " + main_text).split()
+    if len(all_words) <= 4:
+        font_size = 60
+    elif len(all_words) <= 8:
+        font_size = 50
+    else:
+        font_size = 40
+    
+    font_header = get_font(font_size, bold=True)
+    font_main = get_font(font_size, bold=True)
+    
+    # Максимальная ширина текста
+    max_text_width = width - 200
+    
+    # Разбиваем тексты
+    header_lines = wrap_text(header_text, font_header, draw, max_text_width)
+    main_lines = wrap_text(main_text, font_main, draw, max_text_width)
+    
+    header_final = '\n'.join(header_lines)
+    main_final = '\n'.join(main_lines)
+    
+    # Позиции текста
+    header_y = 150
+    main_y = 900
+    
+    # Заголовок над аватаркой
+    bbox_header = draw.multiline_textbbox((0, 0), header_final, font=font_header, align="center")
+    header_width = bbox_header[2] - bbox_header[0]
+    header_height = bbox_header[3] - bbox_header[1]
+    x_header = (width - header_width) // 2
+    
+    # Полупрозрачный фон под заголовок
+    draw.rectangle(
+        [x_header - 20, header_y - 10, x_header + header_width + 20, header_y + header_height + 10],
+        fill=(0, 0, 0, 180)
+    )
+    
+    # Текст заголовка
+    draw.multiline_text(
+        (x_header, header_y), 
+        header_final, 
+        font=font_header, 
+        fill=(255, 255, 255),
+        align="center"
+    )
+    
+    # Основной текст под аватаркой
+    bbox_main = draw.multiline_textbbox((0, 0), main_final, font=font_main, align="center")
+    main_width = bbox_main[2] - bbox_main[0]
+    main_height = bbox_main[3] - bbox_main[1]
+    x_main = (width - main_width) // 2
+    
+    # Полупрозрачный фон под основной текст
+    draw.rectangle(
+        [x_main - 20, main_y - 10, x_main + main_width + 20, main_y + main_height + 10],
+        fill=(0, 0, 0, 180)
+    )
+    
+    # Текст
     draw.multiline_text(
         (x_main, main_y), 
         main_final, 
@@ -253,29 +377,63 @@ async def on_message(message):
 
 @bot.command(name="dem")
 async def dem_command(ctx):
-    """Создать демотиватор из двух случайных сообщений"""
+    """Создать обычный демотиватор из двух случайных сообщений"""
     
     if len(message_history) < 2:
         await ctx.send("Нужно минимум 2 сообщения в базе. Пиши что-нибудь!")
         return
     
     async with ctx.typing():
-        # Выбираем два РАЗНЫХ случайных сообщения
         msg1, msg2 = random.sample(list(message_history), 2)
         
-        # Заголовок - текст первого сообщения
-        header_text = msg1['text']
-        # Основной текст - текст второго сообщения
-        main_text = msg2['text']
-        
         bg = await download_random_image()
-        img = create_demotivator(header_text, main_text, bg)
+        img = create_demotivator(msg1['text'], msg2['text'], bg)
         
         img_buffer = io.BytesIO()
         img.save(img_buffer, format='PNG')
         img_buffer.seek(0)
         
         file = discord.File(img_buffer, filename='demotivator.png')
+        await ctx.send(file=file)
+
+@bot.command(name="me")
+async def me_command(ctx):
+    """Создать персональный демотиватор из своих сообщений с аватаркой"""
+    
+    # Фильтруем сообщения только этого пользователя
+    user_messages = [msg for msg in message_history if msg['author'] == ctx.author.display_name]
+    
+    if len(user_messages) < 2:
+        await ctx.send("Нужно минимум 2 твоих сообщения в базе. Напиши что-нибудь ещё!")
+        return
+    
+    async with ctx.typing():
+        # Выбираем два РАЗНЫХ сообщения этого пользователя
+        msg1, msg2 = random.sample(user_messages, 2)
+        
+        # Скачиваем аватарку пользователя
+        avatar_img = None
+        if ctx.author.avatar:
+            avatar_url = ctx.author.avatar.url
+            async with aiohttp.ClientSession() as session:
+                async with session.get(avatar_url) as resp:
+                    if resp.status == 200:
+                        avatar_data = await resp.read()
+                        avatar_img = Image.open(io.BytesIO(avatar_data))
+        
+        # Создаём персональный демотиватор
+        img = create_personal_demotivator(
+            msg1['text'], 
+            msg2['text'], 
+            ctx.author.display_name,
+            avatar_img
+        )
+        
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        
+        file = discord.File(img_buffer, filename='personal_demotivator.png')
         await ctx.send(file=file)
 
 @bot.command(name="dem_last")
@@ -336,13 +494,14 @@ async def dem_help_command(ctx):
     """Помощь"""
     embed = discord.Embed(
         title="ДЕМОТИВАТОР БОТ",
-        description="Берёт два случайных сообщения: верхнее и нижнее",
+        description="Два режима: общий и персональный",
         color=0xff5500
     )
     embed.add_field(
         name="Команды",
         value=(
             "dem - случайный демотиватор (2 разных сообщения)\n"
+            "me - персональный демотиватор с твоей аватаркой\n"
             "dem_last - последние сообщения\n"
             "dem_stats - статистика\n"
             "dem_help - помощь"
@@ -356,13 +515,24 @@ async def dem_help_command(ctx):
 async def on_ready():
     print(f"Бот {bot.user} готов!")
     print(f"Сохраняю сообщения до 20 слов")
+    print(f"Доступны команды: dem, me, dem_last, dem_stats, dem_help")
     
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="чат | v1!dem"
+            name="чат | v1!dem или v1!me"
         )
     )
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandInvokeError):
+        error = error.original
+    
+    if isinstance(error, discord.Forbidden):
+        await ctx.send("❌ У бота нет прав отправлять файлы в этот канал. Нужно включить `Attach Files`.")
+    else:
+        raise error
 
 if __name__ == "__main__":
     bot.run(TOKEN)
