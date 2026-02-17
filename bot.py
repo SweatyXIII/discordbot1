@@ -234,7 +234,7 @@ def create_demotivator(header_text, main_text, background_img=None):
     
     return canvas
 
-def create_personal_demotivator(header_text, main_text, author_name, avatar_img=None):
+def create_personal_demotivator(header_text, main_text, avatar_img=None):
     """Создаёт персональный демотиватор с аватаркой на весь фон"""
     width, height = 1200, 1200
     
@@ -330,20 +330,6 @@ def create_personal_demotivator(header_text, main_text, author_name, avatar_img=
         align="center"
     )
     
-    # Добавляем имя автора мелким текстом
-    font_small = get_font(30)
-    author_text = f"@{author_name}"
-    bbox_author = draw.textbbox((0, 0), author_text, font=font_small)
-    author_width = bbox_author[2] - bbox_author[0]
-    x_author = (width - author_width) // 2
-    y_author = main_y + main_height + 50
-    
-    draw.rectangle(
-        [x_author - 20, y_author - 5, x_author + author_width + 20, y_author + 30],
-        fill=(0, 0, 0, 180)
-    )
-    draw.text((x_author, y_author), author_text, font=font_small, fill=(200, 200, 200))
-    
     return canvas
 
 @bot.event
@@ -390,9 +376,8 @@ async def dem_command(ctx):
 
 @bot.command(name="me")
 async def me_command(ctx):
-    """Создать персональный демотиватор из своих сообщений с аватаркой на фон"""
+    """Создать персональный демотиватор из своих сообщений"""
     
-    # Фильтруем сообщения только этого пользователя
     user_messages = [msg for msg in message_history if msg['author'] == ctx.author.display_name]
     
     if len(user_messages) < 2:
@@ -400,10 +385,8 @@ async def me_command(ctx):
         return
     
     async with ctx.typing():
-        # Выбираем два РАЗНЫХ сообщения этого пользователя
         msg1, msg2 = random.sample(user_messages, 2)
         
-        # Скачиваем аватарку пользователя
         avatar_img = None
         if ctx.author.avatar:
             avatar_url = ctx.author.avatar.url
@@ -413,11 +396,9 @@ async def me_command(ctx):
                         avatar_data = await resp.read()
                         avatar_img = Image.open(io.BytesIO(avatar_data))
         
-        # Создаём персональный демотиватор
         img = create_personal_demotivator(
             msg1['text'], 
             msg2['text'], 
-            ctx.author.display_name,
             avatar_img
         )
         
@@ -430,38 +411,30 @@ async def me_command(ctx):
 
 @bot.command(name="random")
 async def random_command(ctx):
-    """Создать демотиватор из сообщений случайного пользователя с его аватаркой"""
+    """Создать демотиватор из сообщений случайного пользователя"""
     
     if len(message_history) < 2:
         await ctx.send("Нужно минимум 2 сообщения в базе. Пиши что-нибудь!")
         return
     
     async with ctx.typing():
-        # Получаем список всех уникальных авторов
         authors = list(set([msg['author'] for msg in message_history]))
-        
-        # Выбираем случайного автора
         random_author = random.choice(authors)
         
-        # Берём все сообщения этого автора
         author_messages = [msg for msg in message_history if msg['author'] == random_author]
         
-        # Если у автора меньше 2 сообщений, берём другого
         while len(author_messages) < 2:
             random_author = random.choice(authors)
             author_messages = [msg for msg in message_history if msg['author'] == random_author]
         
-        # Выбираем два случайных сообщения
         msg1, msg2 = random.sample(author_messages, 2)
         
-        # Пытаемся найти пользователя на сервере по нику
         target_user = None
         for member in ctx.guild.members:
             if member.display_name == random_author or member.name == random_author:
                 target_user = member
                 break
         
-        # Скачиваем аватарку
         avatar_img = None
         if target_user and target_user.avatar:
             avatar_url = target_user.avatar.url
@@ -471,11 +444,9 @@ async def random_command(ctx):
                         avatar_data = await resp.read()
                         avatar_img = Image.open(io.BytesIO(avatar_data))
         
-        # Создаём персональный демотиватор
         img = create_personal_demotivator(
             msg1['text'], 
             msg2['text'], 
-            random_author,
             avatar_img
         )
         
@@ -484,7 +455,7 @@ async def random_command(ctx):
         img_buffer.seek(0)
         
         file = discord.File(img_buffer, filename=f'random_{random_author}.png')
-        await ctx.send(f"**Случайный пользователь: {random_author}**", file=file)
+        await ctx.send(file=file)
 
 @bot.command(name="dem_last")
 async def dem_last_command(ctx):
@@ -550,7 +521,7 @@ async def dem_help_command(ctx):
     embed.add_field(
         name="Команды",
         value=(
-            "dem - случайный демотиватор (2 любых сообщения)\n"
+            "dem - случайный демотиватор (2 любых сообщения + картинка)\n"
             "me - твой персональный демотиватор (твоя аватарка на фоне)\n"
             "random - демотиватор случайного пользователя\n"
             "dem_last - последние сообщения\n"
